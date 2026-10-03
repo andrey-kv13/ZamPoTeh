@@ -20,9 +20,11 @@ build/
 # Runtime (бот создаёт при работе)
 app/data/*.db
 app/data/*.db-*
-app/data/photos/*
+app/data/photos/**
+!app/data/photos/
 !app/data/photos/.gitkeep
-app/data/pdf/*
+app/data/pdf/**
+!app/data/pdf/
 !app/data/pdf/.gitkeep
 app/data/*.jpg
 app/data/*.png
