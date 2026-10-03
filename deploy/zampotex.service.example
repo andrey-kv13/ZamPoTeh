@@ -1,0 +1,16 @@
+[Unit]
+Description=ZamPoTeh Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zampotex
+WorkingDirectory=/opt/zampotex/app
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/zampotex/app/.venv/bin/python -m zampotex
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

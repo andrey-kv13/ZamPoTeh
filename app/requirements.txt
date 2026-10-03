@@ -1,0 +1,8 @@
+aiogram>=3.15,<4
+sqlalchemy[asyncio]>=2.0.36,<3
+aiosqlite>=0.20
+asyncpg>=0.30
+pydantic-settings>=2.6
+fpdf2>=2.8
+tzdata>=2024.2
+vininfo>=1.9.2

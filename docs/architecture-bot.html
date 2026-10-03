@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ЗамПоТех — структура Telegram-бота (для разработчика)</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e7ecf3;
+      --muted: #9aa8bc;
+      --accent: #5b9cff;
+      --warn: #ffb020;
+      --ok: #3dd68c;
+      --border: #2d3a4d;
+      --code-bg: #0d1117;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    header {
+      padding: 2rem 1.5rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #152238 0%, var(--bg) 100%);
+    }
+    header h1 { margin: 0 0 0.5rem; font-size: 1.75rem; }
+    header p { margin: 0; color: var(--muted); max-width: 52rem; }
+    .meta { margin-top: 1rem; font-size: 0.9rem; color: var(--muted); }
+    .meta span { margin-right: 1.25rem; }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(15, 20, 25, 0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      padding: 0.5rem 1rem;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    nav a {
+      color: var(--accent);
+      text-decoration: none;
+      margin-right: 1rem;
+      font-size: 0.85rem;
+    }
+    nav a:hover { text-decoration: underline; }
+    main { max-width: 56rem; margin: 0 auto; padding: 1.5rem; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    h2 { margin-top: 0; font-size: 1.25rem; color: #fff; }
+    h3 { font-size: 1.05rem; margin-top: 1.25rem; color: #dce6f5; }
+    p, li { color: var(--text); }
+    li { margin-bottom: 0.35rem; }
+    .muted { color: var(--muted); }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      vertical-align: middle;
+    }
+    .badge-ok { background: #1a3d2e; color: var(--ok); }
+    .badge-warn { background: #3d3018; color: var(--warn); }
+    .badge-info { background: #1a2d4d; color: var(--accent); }
+    pre, code {
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.82rem;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+    }
+    code { background: var(--code-bg); padding: 0.1rem 0.35rem; border-radius: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin: 0.75rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.65rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #121a24; color: #cbd5e1; }
+    .diagram {
+      background: var(--code-bg);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: 0.78rem;
+      line-height: 1.35;
+      color: #b8c5d6;
+    }
+    footer {
+      text-align: center;
+      padding: 2rem 1rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .rule-box {
+      border-left: 3px solid var(--warn);
+      padding-left: 1rem;
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ЗамПоТех — архитектура Telegram-бота</h1>
+    <p>
+      Документ для разработчика: как устроен backend бота, какие модули за что отвечают,
+      какие есть ограничения продукта и куда подключать платные каталоги (очередь 2).
+    </p>
+    <div class="meta">
+      <span>Бот: <strong>@ZamPoTehProBot</strong> (id 8893240032)</span>
+      <span>Код: <strong>z:\ZamPoTex\app</strong></span>
+      <span>Обновлено: октябрь 2026</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#product">Продукт</a>
+    <a href="#stack">Стек</a>
+    <a href="#repo">Репозиторий</a>
+    <a href="#runtime">Запуск</a>
+    <a href="#config">Конфиг</a>
+    <a href="#middleware">Middleware</a>
+    <a href="#db">БД</a>
+    <a href="#fsm">FSM</a>
+    <a href="#routers">Роутеры</a>
+    <a href="#vin">VIN</a>
+    <a href="#search">Поиск</a>
+    <a href="#sources">Источники</a>
+    <a href="#rules">Правила</a>
+    <a href="#roadmap">Очередь 2</a>
+    <a href="#tests">Тесты</a>
+  </nav>
+
+  <main>
+    <section id="product">
+      <h2>1. Назначение продукта</h2>
+      <p>
+        <strong>ЗамПоТех</strong> — персональный помощник владельца авто в Telegram (в перспективе тот же backend для APK).
+        Пользователь описывает запчасть своими словами; бот привязывает запрос к <strong>конкретному автомобилю в гараже</strong>,
+        уточняет сторону / двигатель / PR-коды при необходимости и возвращает <strong>справку из открытых источников</strong>,
+        не подставляя каталожные номера «из головы».
+      </p>
+      <h3>Ключевые модули UX</h3>
+      <ul>
+        <li><strong>Гараж</strong> — до 10 авто по VIN, карточка с открытым decode + поля из СТС (двигатель, пробег, PR).</li>
+        <li><strong>Поиск запчасти</strong> — NL-запрос, FSM-уточнения, PDF/стеллаж, ссылки на агрегаторы (Exist, Emex, …).</li>
+        <li><strong>История по VIN</strong> — общая для всех владельцев этого VIN (без имени/пробега); можно скрыть свой запрос.</li>
+        <li><strong>Стеллаж</strong> — учёт купленных/установленных деталей (формулировка пользователя, не OEM).</li>
+        <li><strong>Напоминания</strong> — по пробегу/дате; фоновая задача каждые 5 минут.</li>
+        <li><strong>Профиль</strong> — город, режим интервалов, удаление аккаунта.</li>
+        <li><strong>Админка</strong> — статистика, блокировка, суточный лимит (для будущего платного адаптера).</li>
+      </ul>
+    </section>
+
+    <section id="stack">
+      <h2>2. Технологический стек</h2>
+      <table>
+        <tr><th>Слой</th><th>Технология</th></tr>
+        <tr><td>Bot API</td><td>aiogram 3.x, long polling (webhook не используется)</td></tr>
+        <tr><td>FSM</td><td>MemoryStorage (состояние теряется при рестарте процесса)</td></tr>
+        <tr><td>БД</td><td>SQLAlchemy 2 async; по умолчанию SQLite (<code>data/zampotex.db</code>, WAL)</td></tr>
+        <tr><td>Настройки</td><td>pydantic-settings, <code>app/.env</code></td></tr>
+        <tr><td>VIN</td><td>NHTSA vPIC, mcp.vin, DB.VIN, vininfo, локальный <code>data/wmi.csv</code>, таблицы BMW/VAG</td></tr>
+        <tr><td>PDF</td><td>fpdf2 (fallback — txt)</td></tr>
+      </table>
+    </section>
+
+    <section id="repo">
+      <h2>3. Структура каталога <code>app/</code></h2>
+      <pre>
+app/
+├── .env                 # секреты (gitignore): BOT_TOKEN, ADMIN_IDS
+├── .env.example
+├── requirements.txt
+├── scripts/deploy_vps.py # деплой на VPS (архив + systemd)
+├── tests/test_rules.py
+└── zampotex/
+    ├── __main__.py      # python -m zampotex
+    ├── main.py          # точка входа, polling, напоминания
+    ├── config.py
+    ├── db.py
+    ├── models.py        # ORM
+    ├── repo.py          # запросы к БД
+    ├── middlewares.py   # сессия, согласие, private-only
+    ├── states.py        # FSM StatesGroup
+    ├── texts.py         # тексты UI, disclaimer
+    ├── keyboards.py     # Reply + inline
+    ├── ui.py            # present() для Message/CallbackQuery
+    ├── formatters.py    # карточки, результаты поиска
+    ├── parsing.py       # VIN, intent, сторона, артикулы
+    ├── vin_lookup.py    # decode VIN, explain()
+    ├── car_spec.py      # строки карточки авто
+    ├── open_sources.py  # NHTSA отзывы, AutoTools, …
+    ├── maintenance.py   # универсальные чек-листы ТО
+    ├── marketplace_links.py # URL-кнопки агрегаторов
+    ├── files.py         # фото на диск
+    ├── pdfexport.py
+    ├── notifier.py      # напоминания
+    ├── data/wmi.csv
+    └── handlers/
+        ├── start.py     # /start, меню, согласие, nav:*
+        ├── garage.py    # гараж, VIN, transfer
+        ├── search.py    # поиск, история, PDF
+        ├── shelf.py
+        ├── reminders.py
+        ├── profile.py
+        ├── admin.py
+        └── fallback.py  # VIN в простое, фото, catch-all
+      </pre>
+    </section>
+
+    <section id="runtime">
+      <h2>4. Запуск и деплой</h2>
+      <h3>Локально (Windows)</h3>
+      <pre>cd z:\ZamPoTex\app
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+# заполнить .env → BOT_TOKEN=...
+.\.venv\Scripts\python.exe -m zampotex</pre>
+      <p class="muted">Одновременно может работать только <strong>один</strong> процесс polling на токен (локальный + VPS = конфликт).</p>
+      <h3>Production (VPS)</h3>
+      <ul>
+        <li>Путь: <code>/opt/zampotex/app</code></li>
+        <li>Unit: <code>systemctl status zampotex</code></li>
+        <li>Повторный деплой: <code>scripts/deploy_vps.py</code> (переменная <code>VPS_PASS</code>)</li>
+      </ul>
+      <div class="diagram">
+Telegram ──► aiogram Dispatcher ──► AppMiddleware (session, consent)
+                    │
+                    ├── start / garage / search / shelf / reminders / profile / admin
+                    └── fallback (последний)
+                    │
+                    ▼
+              SQLAlchemy ──► SQLite (data/zampotex.db)
+                    │
+     фон: asyncio task ──► notifier.dispatch_reminders (каждые 300 с)
+      </div>
+    </section>
+
+    <section id="config">
+      <h2>5. Конфигурация (<code>.env</code>)</h2>
+      <table>
+        <tr><th>Переменная</th><th>Описание</th></tr>
+        <tr><td><code>BOT_TOKEN</code></td><td>Токен @BotFather. Не коммитить.</td></tr>
+        <tr><td><code>BOT_ID</code></td><td>8893240032 — для сверки с токеном</td></tr>
+        <tr><td><code>ADMIN_IDS</code></td><td>Telegram user id через запятую (доступ /admin)</td></tr>
+        <tr><td><code>DATABASE_URL</code></td><td>По умолчанию sqlite в <code>data/</code>; можно PostgreSQL</td></tr>
+      </table>
+      <p>Админы задаются только в env; в коде есть дефолтный список в <code>config.py</code> (дублировать при смене).</p>
+      <p><span class="badge badge-info">Команда /admin</span> видна только в меню команд для chat_id из ADMIN_IDS.</p>
+    </section>
+
+    <section id="middleware">
+      <h2>6. Middleware и доступ</h2>
+      <ul>
+        <li>Только <strong>личные чаты</strong> (<code>ChatType.PRIVATE</code>).</li>
+        <li>Без согласия (оферта + ПДн) доступны только <code>/start</code>, <code>/help</code>, <code>consent:*</code>.</li>
+        <li>На каждый update: создаётся async SQLAlchemy session → handler → <code>commit</code>.</li>
+        <li><code>user.is_blocked</code> — блокировка (кроме админов).</li>
+      </ul>
+    </section>
+
+    <section id="db">
+      <h2>7. Модель данных</h2>
+      <table>
+        <tr><th>Таблица</th><th>Назначение</th></tr>
+        <tr><td><code>users</code></td><td>telegram_id, город, consent, active_car_id, interval_profile, blocked</td></tr>
+        <tr><td><code>cars</code></td><td>VIN, марка/модель/год, двигатель, КПП, пробег, PR, ownership (current/sold)</td></tr>
+        <tr><td><code>searches</code></td><td>История запросов: vin, text, side, summary, hidden, counted, status</td></tr>
+        <tr><td><code>shelf_items</code></td><td>Стеллаж: title, oem?, status, цена</td></tr>
+        <tr><td><code>reminders</code></td><td>work_code, next_mileage/date, intervals</td></tr>
+        <tr><td><code>car_photos</code></td><td>Путь к файлу на диске (<code>data/photos/</code>)</td></tr>
+        <tr><td><code>transfer_codes</code></td><td>Передача авто новому владельцу (48 ч)</td></tr>
+        <tr><td><code>link_codes</code></td><td>Связка с будущим APK (<code>/start link_XXXX</code>)</td></tr>
+        <tr><td><code>settings</code></td><td>key-value, напр. <code>search_daily_limit</code></td></tr>
+      </table>
+      <h3>История по VIN</h3>
+      <p>
+        <code>history_for_car</code> выбирает <code>searches</code> где <code>vin</code> совпадает и
+        (<code>hidden=false</code> OR автор = текущий пользователь). При удалении аккаунта
+        нескрытые запросы обезличиваются (<code>user_id=NULL</code>), текст по VIN остаётся.
+      </p>
+    </section>
+
+    <section id="fsm">
+      <h2>8. Конечные автоматы (FSM)</h2>
+      <table>
+        <tr><th>StatesGroup</th><th>Шаги</th></tr>
+        <tr><td><code>AddCar</code></td><td>vin → brand → model → year → city → подтверждение</td></tr>
+        <tr><td><code>EditCar</code></td><td>пробег / двигатель / PR / город</td></tr>
+        <tr><td><code>SearchFlow</code></td><td>text → side? → engine? → gearbox? → stabilizer? → finish</td></tr>
+        <tr><td><code>ShelfFlow</code></td><td>title → oem? → price?</td></tr>
+        <tr><td><code>RemindFlow</code></td><td>авто → пробег/дата → …</td></tr>
+        <tr><td><code>TransferFlow</code></td><td>код передачи</td></tr>
+      </table>
+      <p class="muted">MemoryStorage: при рестарте бота незавершённые диалоги сбрасываются — пользователь видит подсказку /cancel.</p>
+    </section>
+
+    <section id="routers">
+      <h2>9. Роутеры и префиксы callback</h2>
+      <p>Порядок подключения в <code>main.py</code> важен: <strong>fallback последний</strong>.</p>
+      <table>
+        <tr><th>Префикс / событие</th><th>Модуль</th></tr>
+        <tr><td><code>consent:yes|no</code>, <code>nav:menu|garage|cancel</code></td><td>start</td></tr>
+        <tr><td><code>carnew:*</code>, <code>caropen:</code>, <code>cardel:</code>, <code>caredit:</code>, <code>vinok:</code>, <code>transfer:</code></td><td>garage</td></tr>
+        <tr><td><code>find:</code>, <code>hist:</code>, <code>srep:</code>, <code>shide:</code>, <code>cfind:oil:</code></td><td>search</td></tr>
+        <tr><td><code>shelf*</code>, <code>st:</code></td><td>shelf</td></tr>
+        <tr><td><code>rem*</code>, <code>work:</code></td><td>reminders</td></tr>
+        <tr><td><code>admin:*</code>, <code>blk:</code>, <code>limit:</code></td><td>admin</td></tr>
+        <tr><td>Любой другой callback</td><td>fallback → «кнопка неактуальна»</td></tr>
+      </table>
+      <h3>Reply-клавиатура (главное меню)</h3>
+      <p>🔍 Найти запчасть · 🚗 Мой гараж · 📦 Стеллаж · 🔔 Напоминания · 📜 История · 👤 Профиль</p>
+    </section>
+
+    <section id="vin">
+      <h2>10. Разбор VIN</h2>
+      <p><code>lookup_vin(vin, year)</code> — параллельно NHTSA, mcp.vin, DB.VIN; затем <code>interpret()</code>:</p>
+      <ul>
+        <li>WMI из CSV + <code>vininfo</code></li>
+        <li>Коды VAG (знаки 7–8), BMW type (4–7), Avtotor BMW (11-й знак = model year code, не всегда год выпуска)</li>
+        <li>Контрольная цифра ISO 3779</li>
+        <li><code>explain()</code> — HTML для Telegram; <code>build_vin_source_lines()</code> — блок источников</li>
+      </ul>
+      <p>Карточка в гараже: <code>show_car</code> → повторный <code>lookup_vin</code> + <code>car_spec_rows()</code>.</p>
+      <div class="rule-box">
+        <strong>Не выдумывать OEM.</strong> Если открытый источник не дал модель/номер — показывать формулировки из <code>texts.py</code> (<code>NO_CATALOG_NUMBER</code>, <code>EMPTY_RESULT</code>).
+      </div>
+    </section>
+
+    <section id="search">
+      <h2>11. Поток поиска запчасти</h2>
+      <ol>
+        <li><code>start_search</code> — активное авто из гаража (<code>ownership=current</code>).</li>
+        <li><code>parse_query</code> — intent (oil, brake, mount, stabilizer_*, part), side, артикулы из текста.</li>
+        <li>FSM уточняет: сторона (paired), код двигателя (oil/mount), КПП (mount), PR (стабилизатор).</li>
+        <li><code>search_open_parts(brand, model, year, text, intent)</code> → <code>OpenReport</code>.</li>
+        <li><code>result_messages</code>: блок «Можно включать в заказ» = всегда <code>NO_CATALOG_NUMBER</code>; открытые hits отдельно; при oil/brake — <code>maintenance.py</code>.</li>
+        <li>Кнопки: повтор, скрыть из истории VIN, стеллаж, PDF, <strong>URL</strong> на агрегаторы (<code>marketplace_links.py</code>).</li>
+      </ol>
+      <p><span class="badge badge-warn">Адаптер каталога</span> не подключён: <code>Search.counted</code> для лимита почти не растёт; статус <code>open_checked</code>.</p>
+    </section>
+
+    <section id="sources">
+      <h2>12. Открытые источники (<code>open_sources.py</code>)</h2>
+      <table>
+        <tr><th>API</th><th>Что даёт</th></tr>
+        <tr><td>NHTSA Recalls</td><td>Отзывные кампании (с алиасом модели BMW и др.)</td></tr>
+        <tr><td>NHTSA Safety Ratings</td><td>Рейтинги (где есть)</td></tr>
+        <tr><td>NHTSA Canadian specs</td><td>Объём, КПП, привод</td></tr>
+        <tr><td>AutoTools torque/oil</td><td>Моменты затяжки, спеки масла (не OEM-фильтры)</td></tr>
+      </table>
+      <p>Платные TecDoc / Laximo / Exist API <strong>не</strong> вызываются из этого модуля.</p>
+    </section>
+
+    <section id="rules">
+      <h2>13. Продуктовые правила (обязательны при доработке)</h2>
+      <ul>
+        <li>Не генерировать и не угадывать OEM, цены, аналоги без лицензированного источника.</li>
+        <li>Артикулы из текста пользователя помечать как «каталогом не подтверждены».</li>
+        <li>Disclaimer в каждом результате поиска (<code>DISCLAIMER</code>).</li>
+        <li>История VIN — прозрачность: чужие личные данные не показывать; скрытие запроса — только для автора.</li>
+        <li>Голос не распознаётся; фото сохраняется без OCR.</li>
+        <li>Регион MVP: РФ; язык UI — русский.</li>
+      </ul>
+    </section>
+
+    <section id="roadmap">
+      <h2>14. Очередь 2 (ожидаемая интеграция)</h2>
+      <p>Место для платного адаптера (отдельный модуль, feature flag):</p>
+      <ul>
+        <li>Laximo.CAT / TecDoc Web Service — OEM по VIN, кроссы.</li>
+        <li>Тогда: отдельный блок «Подтверждено каталогом», лимит <code>search_daily_limit</code>, <code>Search.counted=True</code>.</li>
+        <li>Не смешивать номера каталога с открытыми hits без явной пометки источника.</li>
+      </ul>
+      <p>ТЗ продукта и ответы заказчика: <code>ЗамПоТех/ЗамПоТех_структурировано_ответы 1.md</code></p>
+    </section>
+
+    <section id="tests">
+      <h2>15. Тесты и качество</h2>
+      <pre>cd app
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v</pre>
+      <p>Покрытие: парсинг VIN, BMW Avtotor, open_sources, запрет «выдуманных» номеров в результате, delete car/account, admins из settings.</p>
+      <h3>Что проверить после изменений</h3>
+      <ul>
+        <li>Добавление авто по VIN (US, EU, Avtotor BMW).</li>
+        <li>Поиск «тормозные диски», «замена масла» — комплект + моменты, без OEM.</li>
+        <li>Один poller на токен.</li>
+        <li>Новый админ — id в ADMIN_IDS + restart + /start у бота.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>16. Контакты и артеfacts</h2>
+      <ul>
+        <li>Исходный код: репозиторий <code>ZamPoTex</code>, рабочая папка бота <code>app/</code>.</li>
+        <li>Деплой-скрипт: <code>app/scripts/deploy_vps.py</code> (не хранить пароли в git).</li>
+        <li>Этот файл можно открыть в браузере и передать разработчику as-is.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    ЗамПоТех · документ для внутренней передачи · не содержит токенов и паролей
+  </footer>
+</body>
+</html>

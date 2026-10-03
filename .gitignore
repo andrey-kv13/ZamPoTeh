@@ -1,0 +1,53 @@
+# Секреты и локальная конфигурация
+.env
+**/.env
+!.env.example
+
+# Python
+.venv/
+**/.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Runtime (бот создаёт при работе)
+app/data/*.db
+app/data/*.db-*
+app/data/photos/*
+!app/data/photos/.gitkeep
+app/data/pdf/*
+!app/data/pdf/.gitkeep
+app/data/*.jpg
+app/data/*.png
+
+# IDE и ОС
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini
+
+# Локальные артефакты Cursor / агента
+.cursor/
+agent-tools/
+assets/
+
+# Логи
+*.log
+
+# Маркeting / черновики (не код)
+*.pdf
+*.pptx
+*.zip
+/AutoParts_*
+/logo.png
+/photo_*.jpg
+/ЗамПоТех/
+/ЗамПоТех_*
