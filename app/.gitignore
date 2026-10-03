@@ -6,6 +6,8 @@ __pycache__/
 .pytest_cache/
 data/*.db
 data/*.db-*
-data/photos/
-data/pdf/
+data/photos/**
+!data/photos/.gitkeep
+data/pdf/**
+!data/pdf/.gitkeep
 *.log
