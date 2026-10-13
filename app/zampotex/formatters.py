@@ -7,7 +7,17 @@ from zampotex.marketplace_links import marketplace_url_buttons
 from zampotex.models import Car, Reminder, Search, ShelfItem, User
 from zampotex.open_sources import OpenReport
 from zampotex.parsing import WORK_LABELS, ParsedQuery, side_label
-from zampotex.texts import DISCLAIMER, NO_CATALOG_HINT, NO_CATALOG_NO_API, NO_CATALOG_NUMBER
+from zampotex.parts_catalog import CatalogResult
+from zampotex.texts import (
+    DISCLAIMER,
+    NO_CATALOG_ARTICLES,
+    NO_CATALOG_GROUP,
+    NO_CATALOG_HINT,
+    NO_CATALOG_NO_API,
+    NO_CATALOG_NUMBER,
+    NO_CATALOG_TREE,
+    NO_CATALOG_VIN,
+)
 from zampotex.vin_lookup import VinInfo
 
 STATUS_LABELS = {
@@ -114,12 +124,19 @@ def garage_text(cars: list[Car]) -> str:
     return "\n".join(lines)
 
 
-def _order_block(catalog_lines: tuple[str, ...] | None, partsapi_on: bool) -> str:
-    if catalog_lines:
-        return "\n".join(catalog_lines)
-    if not partsapi_on:
+def _order_block(catalog: CatalogResult | None) -> str:
+    if catalog is None:
         return NO_CATALOG_NO_API
-    return NO_CATALOG_NUMBER
+    if catalog.lines:
+        return "\n".join(catalog.lines)
+    if not catalog.configured:
+        return NO_CATALOG_NO_API
+    return {
+        "vin": NO_CATALOG_VIN,
+        "tree": NO_CATALOG_TREE,
+        "group": NO_CATALOG_GROUP,
+        "articles": NO_CATALOG_ARTICLES,
+    }.get(catalog.reason, NO_CATALOG_NUMBER)
 
 
 def _open_hits_for_user(report: OpenReport) -> list[str]:
@@ -136,8 +153,7 @@ def result_messages(
     missing: list[str],
     show_maintenance_kit: bool,
     report: OpenReport | None = None,
-    catalog_lines: tuple[str, ...] | None = None,
-    partsapi_configured: bool = True,
+    catalog: CatalogResult | None = None,
 ) -> tuple[str, str]:
     if report is None:
         report = OpenReport((), ())
@@ -149,11 +165,12 @@ def result_messages(
     if parsed.articles:
         understood.append("Номера из текста (TecDoc не проверял): " + ", ".join(parsed.articles))
 
-    order_text = _order_block(catalog_lines, partsapi_configured)
+    order_text = _order_block(catalog)
     open_lines = _open_hits_for_user(report)
+    has_catalog = bool(catalog and catalog.lines)
 
     plain_parts = ["Результат подбора", "", *understood, "", "Можно включать в заказ", order_text]
-    if not catalog_lines and not open_lines:
+    if not has_catalog and not open_lines:
         plain_parts.extend(["", NO_CATALOG_HINT])
     elif open_lines:
         plain_parts.extend(["", "Справочно из открытых баз", *open_lines])
@@ -171,7 +188,7 @@ def result_messages(
         + "\n".join(esc(line) for line in understood)
         + f"\n\n<b>Можно включать в заказ</b>\n{esc(order_text)}"
     )
-    if not catalog_lines and not open_lines:
+    if not has_catalog and not open_lines:
         html_text += f"\n\n{esc(NO_CATALOG_HINT)}"
     elif open_lines:
         html_text += "\n\n<b>Справочно из открытых баз</b>\n" + "\n".join(esc(line) for line in open_lines)

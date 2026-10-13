@@ -103,6 +103,10 @@ def main() -> None:
         raise SystemExit("Set VPS_PASS environment variable")
 
     env = load_env(APP / ".env")
+    partsapi_file = APP / ".env.partsapi"
+    if partsapi_file.exists():
+        env.update(load_env(partsapi_file))
+        print(f"Loaded PartsAPI keys from {partsapi_file.name}")
     token = env.get("BOT_TOKEN", "")
     if not token:
         raise SystemExit("BOT_TOKEN missing in app/.env")
@@ -137,6 +141,8 @@ def main() -> None:
     for key, value in env.items():
         if key.startswith("PARTSAPI_") and value:
             local_env[key] = value
+    if not any(k.startswith("PARTSAPI_") for k in local_env):
+        print("WARNING: no PARTSAPI_* keys — bot will not show TecDoc articles until .env.partsapi or .env is set.")
 
     setup = f"""
 set -e

@@ -1,3 +1,4 @@
+import asyncio
 import html
 
 from aiogram import F, Router
@@ -6,6 +7,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from zampotex.config import is_admin
+from zampotex.parts_catalog import admin_probe
 from zampotex.models import User
 from zampotex.repo import recent_users, search_limit, set_setting, stats
 from zampotex.texts import ADMIN_DENIED, LEADS_DENIED
@@ -20,6 +22,7 @@ def admin_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="Статистика", callback_data="admin:stats")],
             [InlineKeyboardButton(text="Пользователи", callback_data="admin:users")],
             [InlineKeyboardButton(text="Лимит поиска", callback_data="admin:limit")],
+            [InlineKeyboardButton(text="PartsAPI / TecDoc", callback_data="admin:partsapi")],
             [InlineKeyboardButton(text="В меню пользователя", callback_data="nav:menu")],
         ]
     )
@@ -35,7 +38,7 @@ async def show_admin(target, session: AsyncSession) -> None:
         f"Запросы: {data['searches']}\n"
         f"Из них без каталога: {data['unavailable']}\n"
         f"Суточный лимит внешней проверки: {limit}\n\n"
-        "Каталожный адаптер выключен: бот не выдаёт номера без источника.\n"
+        "TecDoc (PartsAPI): см. кнопку «PartsAPI / TecDoc».\n"
         "Очереди сервисов и покупки автомобиля в этом запуске выключены.\n"
         "Лиды организаций пока недоступны."
     )
@@ -107,6 +110,22 @@ async def block_user(callback: CallbackQuery, session: AsyncSession, user: User)
     person.is_blocked = not person.is_blocked
     await callback.answer("Готово")
     await admin_users(callback, session, user)
+
+
+@router.callback_query(F.data == "admin:partsapi")
+async def admin_partsapi(callback: CallbackQuery, user: User) -> None:
+    if not is_admin(user.telegram_id):
+        await callback.answer(ADMIN_DENIED, show_alert=True)
+        return
+    vin = "X4X5D39490D883173"
+    text = html.escape(await asyncio.to_thread(admin_probe, vin, "правый рулевой наконечник"))
+    await present(
+        callback,
+        f"<b>PartsAPI / TecDoc</b>\n\n<pre>{text}</pre>",
+        InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="← Назад", callback_data="admin:home")]]
+        ),
+    )
 
 
 @router.callback_query(F.data == "admin:limit")

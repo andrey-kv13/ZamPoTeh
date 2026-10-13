@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from zampotex.config import get_settings
+from zampotex.partsapi_util import api_error_text
 
 logger = logging.getLogger("zampotex.partsapi")
 
@@ -25,21 +26,43 @@ def call_method(method: str, **params: str) -> dict | list | None:
     """GET https://partsapi.ru/method/{Method}?key=...&param=value"""
     key = _key_for_method(method)
     if not key:
+        logger.debug("PartsAPI %s: no key in settings", method)
         return None
     query = {"key": key, **{k: v for k, v in params.items() if v is not None}}
     url = f"{BASE}/{method}?{urlencode(query)}"
+    raw = ""
     try:
         request = Request(url, headers={"User-Agent": "ZamPoTeh/1.0"})
-        with urlopen(request, timeout=20) as response:
+        with urlopen(request, timeout=25) as response:
             raw = response.read().decode("utf-8", errors="replace")
-    except (HTTPError, URLError, TimeoutError) as exc:
+    except HTTPError as exc:
+        try:
+            raw = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            raw = ""
+        logger.info("PartsAPI %s HTTP %s: %s", method, exc.code, raw[:200] or exc.reason)
+        if raw:
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                pass
+        return None
+    except (URLError, TimeoutError) as exc:
         logger.info("PartsAPI %s: %s", method, exc)
         return None
     try:
-        return json.loads(raw)
+        data = json.loads(raw)
     except json.JSONDecodeError:
-        logger.info("PartsAPI %s: non-JSON response", method)
+        logger.info("PartsAPI %s: non-JSON: %s", method, raw[:200])
         return None
+    err = api_error_text(data if isinstance(data, dict) else None)
+    if err:
+        logger.info("PartsAPI %s API error: %s", method, err[:200])
+    return data
+
+
+def configured_methods() -> tuple[str, ...]:
+    return tuple(sorted(get_settings().partsapi_keys.keys()))
 
 
 def vindecode(vin: str, lang: str = "ru") -> dict | list | None:

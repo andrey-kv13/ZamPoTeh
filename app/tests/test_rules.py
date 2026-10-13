@@ -10,7 +10,7 @@ from zampotex.parsing import detect_side, find_vin, message_is_vin, parse_query,
 from zampotex.vin_lookup import build_vin_source_lines, expected_check_digit, explain, interpret
 from zampotex.open_sources import choose_listed_model, matching_recalls, matching_torque, recall_name_variants, torque_components
 from zampotex.car_spec import car_spec_rows
-from zampotex.texts import DISCLAIMER, NO_CATALOG_NUMBER
+from zampotex.texts import DISCLAIMER, NO_CATALOG_NO_API, NO_CATALOG_NUMBER
 
 
 class ParsingTests(unittest.TestCase):
@@ -45,7 +45,7 @@ class ParsingTests(unittest.TestCase):
         )
         parsed = parse_query("передний сайлентблок нижнего рычага", car.vin)
         html_text, plain = result_messages(car, "передний сайлентблок нижнего рычага", parsed, [], False)
-        self.assertIn(NO_CATALOG_NUMBER, plain)
+        self.assertTrue(NO_CATALOG_NUMBER in plain or NO_CATALOG_NO_API in plain)
         self.assertIn(DISCLAIMER, plain)
         self.assertNotIn("1K0407182", plain)
         self.assertNotIn("1K0407182", html_text)
