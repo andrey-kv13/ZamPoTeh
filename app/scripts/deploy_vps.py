@@ -19,14 +19,51 @@ REMOTE = "/opt/zampotex/app"
 
 
 def load_env(path: Path) -> dict[str, str]:
+    return load_env_from_lines(path.read_text(encoding="utf-8").splitlines())
+
+
+def parse_env_text(text: str) -> dict[str, str]:
+    return load_env_from_lines(text.splitlines())
+
+
+def load_env_from_lines(lines: list[str]) -> dict[str, str]:
     data: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in lines:
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
         data[key.strip()] = value.strip()
     return data
+
+
+def merge_deploy_env(local: dict[str, str], remote: dict[str, str]) -> dict[str, str]:
+    """Локальные BOT_* обновляют сервер; PARTSAPI_* на сервере не затираем пустым локальным .env."""
+    merged = dict(remote)
+    for key in ("BOT_TOKEN", "BOT_ID", "ADMIN_IDS", "DATABASE_URL"):
+        if local.get(key):
+            merged[key] = local[key]
+    for key, value in local.items():
+        if key.startswith("PARTSAPI_") and value:
+            merged[key] = value
+    for key in remote:
+        if key.startswith("PARTSAPI_") and key not in merged:
+            merged[key] = remote[key]
+    return merged
+
+
+def render_env(data: dict[str, str]) -> str:
+    order = ["BOT_TOKEN", "BOT_ID", "ADMIN_IDS", "DATABASE_URL"]
+    lines: list[str] = []
+    seen: set[str] = set()
+    for key in order:
+        if key in data:
+            lines.append(f"{key}={data[key]}")
+            seen.add(key)
+    for key in sorted(data):
+        if key not in seen:
+            lines.append(f"{key}={data[key]}")
+    return "\n".join(lines) + "\n"
 
 
 def build_tarball() -> bytes:
@@ -91,14 +128,15 @@ def main() -> None:
     finally:
         sftp.close()
 
-    remote_env = textwrap.dedent(
-        f"""\
-        BOT_TOKEN={token}
-        BOT_ID=8893240032
-        ADMIN_IDS={admin_ids}
-        DATABASE_URL={db_url}
-        """
-    )
+    local_env = {
+        "BOT_TOKEN": token,
+        "BOT_ID": env.get("BOT_ID", "8893240032"),
+        "ADMIN_IDS": admin_ids,
+        "DATABASE_URL": db_url,
+    }
+    for key, value in env.items():
+        if key.startswith("PARTSAPI_") and value:
+            local_env[key] = value
 
     setup = f"""
 set -e
@@ -110,11 +148,19 @@ rm -rf {REMOTE}/zampotex {REMOTE}/requirements.txt
 tar -xzf /opt/zampotex/app.tgz -C {REMOTE}
 python3 -m venv {REMOTE}/.venv
 {REMOTE}/.venv/bin/pip install -q -r {REMOTE}/requirements.txt
-cat > {REMOTE}/.env << 'ENVEOF'
-{remote_env}ENVEOF
-chmod 600 {REMOTE}/.env
 """
     run(client, setup)
+
+    _, stdout, _ = client.exec_command(f"test -f {REMOTE}/.env && cat {REMOTE}/.env || true")
+    remote_text = stdout.read().decode("utf-8", errors="replace")
+    remote_env = parse_env_text(remote_text) if remote_text.strip() else {}
+    merged = merge_deploy_env(local_env, remote_env)
+    remote_env_body = render_env(merged)
+
+    run(
+        client,
+        f"cat > {REMOTE}/.env << 'ENVEOF'\n{remote_env_body}ENVEOF\nchmod 600 {REMOTE}/.env",
+    )
 
     unit = textwrap.dedent(
         f"""\

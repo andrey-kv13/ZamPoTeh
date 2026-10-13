@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from zampotex.config import get_settings
 from zampotex.parsing import wmi_brand, year_hints
 from zampotex.open_sources import notes_html, vin_public_notes
 
@@ -333,6 +334,7 @@ def build_vin_source_lines(
     nhtsa: dict | None,
     mcp: dict | None,
     dbvin: dict | None,
+    partsapi: dict | list | None = None,
 ) -> tuple[str, ...]:
     lines: list[str] = []
     wmi_bits: list[str] = []
@@ -403,6 +405,13 @@ def build_vin_source_lines(
             f"Код модельного года BMW: 11-й знак {info.vin[10]} → {info.bmw_model_year_code} "
             "(не равен году выпуска в СТС)"
         )
+    from zampotex.partsapi_client import summarize_vindecode
+
+    pa_notes = summarize_vindecode(partsapi)
+    if pa_notes:
+        lines.append("PartsAPI TecDoc VINdecode (лицензия): " + "; ".join(pa_notes))
+    elif get_settings().partsapi_key_vindecode:
+        lines.append("PartsAPI TecDoc VINdecode (лицензия): ключ задан, ответ пустой или ошибка")
     return tuple(lines)
 
 
@@ -660,18 +669,25 @@ async def lookup_vin(vin: str, current_year: int) -> VinInfo:
         except Exception:
             return None
 
-    nhtsa_raw, mcp_raw, dbvin_raw = await asyncio.gather(
+    def load_partsapi():
+        from zampotex.partsapi_client import vindecode
+
+        return vindecode(vin)
+
+    nhtsa_raw, mcp_raw, dbvin_raw, partsapi_raw = await asyncio.gather(
         asyncio.to_thread(load_nhtsa),
         asyncio.to_thread(load_mcp),
         asyncio.to_thread(load_dbvin),
+        asyncio.to_thread(load_partsapi),
         return_exceptions=True,
     )
     nhtsa = None if isinstance(nhtsa_raw, Exception) else nhtsa_raw
     mcp = None if isinstance(mcp_raw, Exception) else mcp_raw
     dbvin = None if isinstance(dbvin_raw, Exception) else dbvin_raw
+    partsapi = None if isinstance(partsapi_raw, Exception) else partsapi_raw
 
     info = interpret(vin, nhtsa, current_year, mcp=mcp, dbvin=dbvin)
-    info.source_lines = build_vin_source_lines(info, nhtsa, mcp, dbvin)
+    info.source_lines = build_vin_source_lines(info, nhtsa, mcp, dbvin, partsapi=partsapi)
     try:
         info.open_notes = await vin_public_notes(info.brand, info.model, info.year)
     except Exception:

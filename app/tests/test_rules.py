@@ -25,6 +25,7 @@ class ParsingTests(unittest.TestCase):
         self.assertIsNone(detect_side("неисправность зеркала"))
         self.assertEqual(detect_side("зеркало правое"), "right")
         self.assertEqual(detect_side("фара левая"), "left")
+        self.assertEqual(detect_side("тормозной диск лнвый передний"), "left")
 
     def test_articles_skip_vin_and_short_years(self):
         parsed = parse_query("сайлентблок 1K0407182 для XW8ZZZ5NZBG100948 2010", "XW8ZZZ5NZBG100948")
@@ -48,7 +49,7 @@ class ParsingTests(unittest.TestCase):
         self.assertIn(DISCLAIMER, plain)
         self.assertNotIn("1K0407182", plain)
         self.assertNotIn("1K0407182", html_text)
-        self.assertIn("Проверенные открытые источники", plain)
+        self.assertNotIn("Проверенные открытые источники", plain)
 
     def test_open_facts_stay_out_of_the_order_list(self):
         hits, detail = matching_recalls(
@@ -96,7 +97,8 @@ class ParsingTests(unittest.TestCase):
         )
         self.assertEqual(chosen, "535D XDRIVE")
         self.assertFalse(exact)
-        self.assertEqual(torque_components("тормозные диски", "part"), ("wheel", "caliper"))
+        self.assertEqual(torque_components("тормозные диски", "part"), ())
+        self.assertEqual(torque_components("тормозные колодки", "brake"), ("wheel", "caliper"))
         self.assertEqual(recall_name_variants("535D XDRIVE"), ("535D XDRIVE", "535D"))
 
     def test_wmi_list_covers_published_codes(self):

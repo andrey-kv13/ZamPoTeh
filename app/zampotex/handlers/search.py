@@ -1,3 +1,5 @@
+import asyncio
+
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
@@ -9,6 +11,8 @@ from zampotex.formatters import history_text, result_link_keyboard, result_messa
 from zampotex.keyboards import cars_keyboard, side_keyboard, skip_keyboard
 from zampotex.models import Car, Search, ShelfItem, User
 from zampotex.open_sources import search_open_parts
+from zampotex.parts_catalog import search_catalog_lines
+from zampotex.partsapi_client import catalog_api_configured
 from zampotex.parsing import parse_engine_line, parse_query
 from zampotex.pdfexport import write_pdf
 from zampotex.repo import get_car, get_search, history_for_car, list_cars
@@ -18,6 +22,14 @@ from zampotex.ui import present
 
 router = Router()
 SEARCH_STATES = (SearchFlow.text, SearchFlow.side, SearchFlow.engine, SearchFlow.gearbox, SearchFlow.stabilizer)
+
+
+async def _catalog_for_search(vin: str, text: str, intent: str) -> tuple[tuple[str, ...], bool]:
+    configured = catalog_api_configured()
+    if not configured:
+        return (), False
+    lines = await asyncio.to_thread(search_catalog_lines, vin, text, intent)
+    return lines, True
 
 
 def result_keyboard(
@@ -341,10 +353,23 @@ async def finish(message: Message, state: FSMContext, session: AsyncSession, use
         missing.append("тип коробки")
     if data.get("stab_skip"):
         missing.append("диаметр или PR-код стабилизатора")
-    show_kit = parsed.intent in {"oil", "brake"}
-    progress = await message.answer("Ищу в открытых базах…")
-    report = await search_open_parts(car.brand, car.model, car.year, data["text"], parsed.intent)
-    html_text, plain = result_messages(car, data["text"], parsed, missing, show_kit, report)
+    show_kit = parsed.intent == "oil"
+    progress = await message.answer("Ищу…")
+    report, catalog = await asyncio.gather(
+        search_open_parts(car.brand, car.model, car.year, data["text"], parsed.intent),
+        _catalog_for_search(car.vin, data["text"], parsed.intent),
+    )
+    catalog_lines, partsapi_on = catalog
+    html_text, plain = result_messages(
+        car,
+        data["text"],
+        parsed,
+        missing,
+        show_kit,
+        report,
+        catalog_lines=catalog_lines,
+        partsapi_configured=partsapi_on,
+    )
     row = Search(
         user_id=user.id,
         car_id=car.id,
@@ -410,10 +435,23 @@ async def repeat_search(callback: CallbackQuery, session: AsyncSession, user: Us
         return
     parsed = parse_query(row.text, car.vin)
     parsed.side = row.side
-    await callback.answer("Проверяю открытые базы")
-    report = await search_open_parts(car.brand, car.model, car.year, row.text, parsed.intent)
-    show_kit = parsed.intent in {"oil", "brake"}
-    html_text, plain = result_messages(car, row.text, parsed, [], show_kit, report)
+    await callback.answer("Проверяю…")
+    report, catalog = await asyncio.gather(
+        search_open_parts(car.brand, car.model, car.year, row.text, parsed.intent),
+        _catalog_for_search(car.vin, row.text, parsed.intent),
+    )
+    catalog_lines, partsapi_on = catalog
+    show_kit = parsed.intent == "oil"
+    html_text, plain = result_messages(
+        car,
+        row.text,
+        parsed,
+        [],
+        show_kit,
+        report,
+        catalog_lines=catalog_lines,
+        partsapi_configured=partsapi_on,
+    )
     plain = "Повторная проверка открытых баз.\n\n" + plain
     html_text = "<b>Повторная проверка открытых баз.</b>\n\n" + html_text
     fresh = Search(

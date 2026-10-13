@@ -275,6 +275,8 @@ def _fold(text: str) -> str:
 
 def detect_side(text: str) -> str | None:
     folded = _fold(text)
+    if re.search(r"лнв", folded):
+        folded = folded.replace("лнв", "лев")
     left = re.search(r"(^|[^а-яa-z])(лев|водитель)", folded) is not None
     right = re.search(r"(^|[^а-яa-z])(прав|пассажир)", folded) is not None
     if left and right:
@@ -316,7 +318,7 @@ def detect_intent(text: str) -> str:
     if "масл" in folded and not any(part in folded for part in ("короб", "акпп", "мкпп", "вариатор", "редуктор")):
         return "oil"
     if any(part in folded for part in ("тормоз", "колодк", "суппорт")) or (
-        "диск" in folded and any(part in folded for part in ("тормоз", "колод"))
+        "диск" in folded and "тормоз" in folded
     ):
         return "brake"
     if "втулк" in folded and "стабил" in folded:

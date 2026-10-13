@@ -32,10 +32,10 @@ _RECALL_TOPICS = (
 
 _TORQUE_TOPICS = (
     (("тормоз", "колодк"), "wheel"),
-    (("тормоз", "колодк", "суппорт"), "caliper"),
+    (("тормоз", "колодк"), "caliper"),
+    (("суппорт",), "caliper"),
     (("колес", "болт колес", "гайк"), "wheel"),
     (("ступиц", "подшипник"), "wheel-bearing"),
-    (("суппорт",), "caliper"),
     (("свеч",), "spark-plug"),
     (("форсун",), "injector"),
     (("маховик",), "flywheel"),
@@ -109,9 +109,14 @@ def recall_needles(query: str) -> tuple[str, ...]:
 
 def torque_components(query: str, intent: str) -> tuple[str, ...]:
     folded = _fold(query)
+    if "диск" in folded and "тормоз" in folded and "колод" not in folded:
+        return ()
     found: list[str] = []
     for words, component in _TORQUE_TOPICS:
-        if any(word in folded for word in words):
+        if len(words) == 1:
+            if words[0] in folded:
+                found.append(component)
+        elif all(word in folded for word in words):
             found.append(component)
     if intent == "oil":
         found.append("oil-drain")
@@ -481,13 +486,12 @@ async def _oil_status(brand: str | None, model: str | None, query: str, intent: 
 
 
 async def search_open_parts(brand: str | None, model: str | None, year: int | None, query: str, intent: str) -> OpenReport:
-    parts = await asyncio.gather(
-        _recall_status(brand, model, year, query),
-        _safety_status(brand, model, year),
-        _canadian_status(brand, model, year),
-        _torque_status(brand, model, query, intent),
-        _oil_status(brand, model, query, intent),
-    )
+    tasks: list = []
+    if recall_needles(query):
+        tasks.append(_recall_status(brand, model, year, query))
+    tasks.append(_torque_status(brand, model, query, intent))
+    tasks.append(_oil_status(brand, model, query, intent))
+    parts = await asyncio.gather(*tasks)
     statuses = tuple(item[0] for item in parts)
     hits = tuple(hit for item in parts for hit in item[1])
     return OpenReport(statuses, hits)

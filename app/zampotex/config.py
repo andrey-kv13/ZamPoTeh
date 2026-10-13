@@ -20,6 +20,30 @@ class Settings(BaseSettings):
     admin_ids: str = "170051092,311684774,206146757,635342790"
     database_url: str = f"sqlite+aiosqlite:///{(DATA_DIR / 'zampotex.db').as_posix()}"
 
+    # PartsAPI: отдельный key на метод (имя метода как в URL, см. docs/partsapi-setup.md)
+    partsapi_key_vindecode: str = ""
+    partsapi_key_vindecodeoe: str = ""
+    partsapi_key_getsearchtree: str = ""
+    partsapi_key_getarticles: str = ""
+    partsapi_key_getarticle: str = ""
+    partsapi_key_getarticlecrosses: str = ""
+    partsapi_key_toparts: str = ""
+    partsapi_key_tooils: str = ""
+
+    @property
+    def partsapi_keys(self) -> dict[str, str]:
+        pairs = {
+            "VINdecode": self.partsapi_key_vindecode.strip(),
+            "VINdecodeOE": self.partsapi_key_vindecodeoe.strip(),
+            "getSearchTree": self.partsapi_key_getsearchtree.strip(),
+            "getArticles": self.partsapi_key_getarticles.strip(),
+            "getArticle": self.partsapi_key_getarticle.strip(),
+            "getArticleCrosses": self.partsapi_key_getarticlecrosses.strip(),
+            "toParts": self.partsapi_key_toparts.strip(),
+            "toOils": self.partsapi_key_tooils.strip(),
+        }
+        return {name: key for name, key in pairs.items() if key}
+
     @property
     def admins(self) -> frozenset[int]:
         return frozenset(int(part.strip()) for part in self.admin_ids.split(",") if part.strip())

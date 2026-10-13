@@ -7,7 +7,7 @@ from zampotex.marketplace_links import marketplace_url_buttons
 from zampotex.models import Car, Reminder, Search, ShelfItem, User
 from zampotex.open_sources import OpenReport
 from zampotex.parsing import WORK_LABELS, ParsedQuery, side_label
-from zampotex.texts import DISCLAIMER, EMPTY_RESULT, NO_CATALOG_NUMBER
+from zampotex.texts import DISCLAIMER, EMPTY_RESULT, NO_CATALOG_NO_API, NO_CATALOG_NUMBER
 from zampotex.vin_lookup import VinInfo
 
 STATUS_LABELS = {
@@ -44,6 +44,21 @@ def car_card(car: Car, info: VinInfo | None = None) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _url_button_rows(pairs: list[tuple[str, str]]) -> list[list]:
+    from zampotex.keyboards import InlineKeyboardButton
+
+    rows: list[list] = []
+    row: list = []
+    for label, url in pairs:
+        row.append(InlineKeyboardButton(text=label, url=url))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    return rows
 
 
 def car_keyboard(car: Car):
@@ -99,6 +114,21 @@ def garage_text(cars: list[Car]) -> str:
     return "\n".join(lines)
 
 
+def _order_block(catalog_lines: tuple[str, ...] | None, partsapi_on: bool) -> str:
+    if catalog_lines:
+        return "\n".join(catalog_lines)
+    if not partsapi_on:
+        return NO_CATALOG_NO_API
+    return NO_CATALOG_NUMBER
+
+
+def _open_hits_for_user(report: OpenReport) -> list[str]:
+    lines: list[str] = []
+    for hit in report.hits:
+        lines.append(f"• {hit.title}: {hit.text}")
+    return lines or []
+
+
 def result_messages(
     car: Car,
     query: str,
@@ -106,59 +136,49 @@ def result_messages(
     missing: list[str],
     show_maintenance_kit: bool,
     report: OpenReport | None = None,
+    catalog_lines: tuple[str, ...] | None = None,
+    partsapi_configured: bool = True,
 ) -> tuple[str, str]:
     if report is None:
         report = OpenReport((), ())
     understood = [
-        f"Автомобиль: {car.brand} {car.model}, {car.year}",
-        f"VIN: {car.vin}",
+        f"{car.brand} {car.model}, {car.year} · VIN {car.vin}",
         f"Запрос: {query}",
         f"Сторона: {side_label(parsed.side)}",
     ]
-    if car.engine_code:
-        understood.append(f"Двигатель: {car.engine_code}")
-    if car.gearbox:
-        understood.append(f"Коробка: {car.gearbox}")
     if parsed.articles:
-        understood.append("Артикулы из вашего текста (каталогом не подтверждены): " + ", ".join(parsed.articles))
+        understood.append("Номера из текста (TecDoc не проверял): " + ", ".join(parsed.articles))
 
-    found_lines = [f"{hit.source}. {hit.title}. {hit.text}" for hit in report.hits] or [EMPTY_RESULT]
-    source_lines = [f"{item.name}: {item.detail}" for item in report.statuses] or ["Источники не запрашивались."]
-    plain_parts = [
-        "Результат подбора",
-        "",
-        *understood,
-        "",
-        "Можно включать в заказ",
-        NO_CATALOG_NUMBER,
-        "",
-        "Нашлось в открытых источниках",
-        *found_lines,
-        "",
-        "Проверенные открытые источники",
-        *source_lines,
-    ]
+    order_text = _order_block(catalog_lines, partsapi_configured)
+    open_lines = _open_hits_for_user(report)
+
+    plain_parts = ["Результат подбора", "", *understood, "", "Можно включать в заказ", order_text]
+    if open_lines:
+        plain_parts.extend(["", "Справочно из открытых баз", *open_lines])
+    elif not catalog_lines:
+        plain_parts.extend(["", "Справочно из открытых баз", EMPTY_RESULT])
+
     kit_block = format_kit_block(parsed.intent, car) if show_maintenance_kit else None
     if kit_block:
         plain_parts.extend(["", kit_block])
     if missing:
-        plain_parts.extend(["", "Не хватает, чтобы сузить поиск: " + "; ".join(missing)])
+        plain_parts.extend(["", "Уточните: " + "; ".join(missing)])
     plain_parts.extend(["", DISCLAIMER])
     plain = "\n".join(plain_parts)
 
     html_text = (
         "<b>Результат подбора</b>\n\n"
         + "\n".join(esc(line) for line in understood)
-        + f"\n\n<b>Можно включать в заказ</b>\n{esc(NO_CATALOG_NUMBER)}\n"
-        + "\n<b>Нашлось в открытых источниках</b>\n"
-        + "\n".join(esc(line) for line in found_lines)
-        + "\n\n<b>Проверенные открытые источники</b>\n"
-        + "\n".join(esc(line) for line in source_lines)
+        + f"\n\n<b>Можно включать в заказ</b>\n{esc(order_text)}"
     )
+    if open_lines:
+        html_text += "\n\n<b>Справочно из открытых баз</b>\n" + "\n".join(esc(line) for line in open_lines)
+    elif not catalog_lines:
+        html_text += f"\n\n<b>Справочно из открытых баз</b>\n{esc(EMPTY_RESULT)}"
     if kit_block:
         html_text += f"\n\n<b>Комплект работ</b>\n{esc(kit_block)}"
     if missing:
-        html_text += "\n\nНе хватает, чтобы сузить поиск: " + esc("; ".join(missing))
+        html_text += "\n\nУточните: " + esc("; ".join(missing))
     html_text += f"\n\n<i>{esc(DISCLAIMER)}</i>"
     return html_text, plain
 
