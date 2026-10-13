@@ -68,6 +68,21 @@ def _search_terms(query: str, intent: str) -> tuple[str, ...]:
             terms.append("суппорт")
         if not terms:
             terms.append("тормоз")
+    if "наконечник" in folded:
+        terms.extend(["наконечник", "рул"])
+    if "тяга" in folded and ("рул" in folded or "рулев" in folded):
+        terms.extend(["тяга", "рул"])
+    elif "рулев" in folded or re.search(r"(^|[^а-я])рул[^а-я]", folded):
+        if any(x in folded for x in ("наконечник", "тяга", "рейк", "насос")):
+            terms.append("рул")
+    if "шаров" in folded and "опор" in folded:
+        terms.extend(["шаров", "опор"])
+    if "сайлент" in folded:
+        terms.append("сайлент")
+    if "рычаг" in folded:
+        terms.append("рычаг")
+    if "стойк" in folded and "стабил" in folded:
+        terms.extend(["стойк", "стабил"])
     if "перед" in folded or re.search(r"(^|[^а-я])пер[^а-я]", folded):
         terms.append("перед")
     if "зад" in folded:

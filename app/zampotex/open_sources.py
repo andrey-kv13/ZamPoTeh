@@ -19,7 +19,7 @@ OIL_URL = "https://autotools.brightcoding.dev/api/oil-specs"
 _RECALL_TOPICS = (
     (("тормоз", "колодк", "суппорт"), ("brake",)),
     (("подушк", "airbag", "аирбаг"), ("air bag", "airbag")),
-    (("рулев", "рул"), ("steering",)),
+    (("рулев", "рул", "наконечник", "тяга"), ("steering", "tie")),
     (("ремень",), ("seat belt", "belt")),
     (("фар", "фонар"), ("light", "lamp", "visibility")),
     (("топлив", "бензонасос"), ("fuel",)),

@@ -7,7 +7,7 @@ from zampotex.marketplace_links import marketplace_url_buttons
 from zampotex.models import Car, Reminder, Search, ShelfItem, User
 from zampotex.open_sources import OpenReport
 from zampotex.parsing import WORK_LABELS, ParsedQuery, side_label
-from zampotex.texts import DISCLAIMER, EMPTY_RESULT, NO_CATALOG_NO_API, NO_CATALOG_NUMBER
+from zampotex.texts import DISCLAIMER, NO_CATALOG_HINT, NO_CATALOG_NO_API, NO_CATALOG_NUMBER
 from zampotex.vin_lookup import VinInfo
 
 STATUS_LABELS = {
@@ -153,10 +153,10 @@ def result_messages(
     open_lines = _open_hits_for_user(report)
 
     plain_parts = ["Результат подбора", "", *understood, "", "Можно включать в заказ", order_text]
-    if open_lines:
+    if not catalog_lines and not open_lines:
+        plain_parts.extend(["", NO_CATALOG_HINT])
+    elif open_lines:
         plain_parts.extend(["", "Справочно из открытых баз", *open_lines])
-    elif not catalog_lines:
-        plain_parts.extend(["", "Справочно из открытых баз", EMPTY_RESULT])
 
     kit_block = format_kit_block(parsed.intent, car) if show_maintenance_kit else None
     if kit_block:
@@ -171,10 +171,10 @@ def result_messages(
         + "\n".join(esc(line) for line in understood)
         + f"\n\n<b>Можно включать в заказ</b>\n{esc(order_text)}"
     )
-    if open_lines:
+    if not catalog_lines and not open_lines:
+        html_text += f"\n\n{esc(NO_CATALOG_HINT)}"
+    elif open_lines:
         html_text += "\n\n<b>Справочно из открытых баз</b>\n" + "\n".join(esc(line) for line in open_lines)
-    elif not catalog_lines:
-        html_text += f"\n\n<b>Справочно из открытых баз</b>\n{esc(EMPTY_RESULT)}"
     if kit_block:
         html_text += f"\n\n<b>Комплект работ</b>\n{esc(kit_block)}"
     if missing:
